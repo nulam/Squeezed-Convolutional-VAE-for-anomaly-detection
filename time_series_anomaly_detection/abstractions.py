@@ -39,7 +39,7 @@ class TimeSeriesAnomalyDetector:
 
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_columns)
+        X : pd.DataFrame, shape (n_samples, n_columns)
             The training samples. The columns contain samples' features and
             possibly samples' identifiers.
         """
