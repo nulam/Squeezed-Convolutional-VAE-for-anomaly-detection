@@ -41,6 +41,7 @@ it (the documentation of `predict_anomaly_scores` and `fit` is inherited from `T
 
 5. Make sure that your detector passes all tests in `tests/test_detector.py` by running `poetry run python -m pytest tests`. 
 First make sure that in the beginning of `tests/test_detector.py` constant DETECTOR_CLASS points to your anomaly detector 
-and not to `TemplateDetector` (in case you renamed it).
+and not to `TemplateDetector` (in case you renamed it). In case your detector contains additional required parameters (in its constructor), 
+modify tests so that these parameters are filled.
 
 6. Create pull request of the solution branch to the master branch.

@@ -85,7 +85,7 @@ def test_multiple_multivariate_time_series():
 
 
 def test_nans():
-    nan_locs = (1, 5, 6, 23)
+    nan_locs = (1, 5, 6, 13)
     X_df, X_test_df, id_columns = _get_simple_random_dataset(
         size=20,
         n_data_cols=1,
