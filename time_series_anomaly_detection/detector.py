@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, Iterable
 
 import pandas as pd
 
@@ -13,22 +13,25 @@ class TemplateDetector(TimeSeriesAnomalyDetector):
 
     Parameters
     ----------
-    id_columns: List[str], optional
-        ID columns used to identify individual time series. Should be specified
-        in case the detector is going to be working with multiple time series
-        so that the detector can separate them. In case they are not specified,
-        the provided data is regarded as a single time series.
+    id_columns: Iterable[str], optional
+        ID columns used to identify individual time series.
+        Should be specified in case the detector will be provided with
+        multiple time series during training or inference with ID columns
+        included so that the detector might be able to separate individual
+        time series. In case they are not specified, he provided data is
+        regarded as a single time series.
     """
 
     def __init__(
         self,
-        id_columns: Optional[List[str]] = None,
+        id_columns: Optional[Iterable[str]] = None,
     ):
         super().__init__()
         self._id_columns = id_columns
 
-    def predict_anomaly_scores(self, X: pd.DataFrame, *args,
-                               **kwargs) -> pd.Series:
+    def predict_anomaly_scores(
+        self, X: pd.DataFrame, *args, **kwargs
+    ) -> pd.Series:
         # TODO: return predicted anomaly scores for the given samples
         pass
 

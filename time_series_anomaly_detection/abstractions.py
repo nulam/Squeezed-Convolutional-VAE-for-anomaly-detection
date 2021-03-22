@@ -22,8 +22,9 @@ class TimeSeriesAnomalyDetector:
         Parameters
         ----------
         X : pd.DataFrame, shape (n_samples, n_columns)
-            The samples whose anomaly scores are to be predicted. The columns
-            contain samples' features and possibly samples' identifiers.
+            The samples whose anomaly scores are to be predicted.
+            The columns contain samples' features and possibly
+            samples' identifiers.
 
         Returns
         -------

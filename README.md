@@ -3,8 +3,9 @@ This repository acts as a base for Datamole's time series anomaly detection assi
 # Requirements
 
 - Poetry environment file `pyproject.toml` specifies python packages version requirements. In case you decide to use
-Python package listed there, the used version must conform to it. It is strongly recommended to use [poetry](https://python-poetry.org/) and 
-base your environment on the provided `pyproject.toml`.
+Python package listed there, the used version must conform to it. Use [poetry](https://python-poetry.org/) and 
+base your environment on the provided `pyproject.toml`. There are also extra dependencies specified in `pyproject.toml` (e.g. tensorflow). 
+If you decide to use one of these dependencies, make sure that your version conforms to it.
 
 - File `time_series_anomaly_detection/abstractions.py` contains Python module with abstract class `TimeSeriesAnomalyDetector`. Your
 anomaly detector must implement this class. Make sure that the abstract methods are implemented according to their documentation.
