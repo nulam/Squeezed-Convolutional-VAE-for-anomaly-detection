@@ -15,13 +15,18 @@ anomaly detector. As you can see the detector takes `id_columns` parameter in it
 parameter as it's necessary to fulfill requirements for the functionality of anomaly detector.
 
 - File `tests/test_detector.py` contains [pytest](https://docs.pytest.org/en/stable/) module with simple tests that your detector must pass. 
-Make sure that `DETECTOR_CLASS` points to your detector.
+Make sure that `DETECTOR_CLASS` points to your detector. In case your detector contains additional required parameters (in its constructor), 
+modify existing tests so that these parameters are filled. Adding of additional unit tests is welcome but do not change predefined unit tests 
+except for the mentioned exceptions.
 
-- The anomaly detector must be able to handle numerical data with missing values (nan values).
+- The anomaly detector should be able to handle numerical data with missing values (nan values). In case the paper introducing the detector
+does not mention it and there is not a clear solution you can relax on it. For example in case the detector is working with certain window size, 
+ignoring (window size - 1) samples after sample with a missing value is a possible solution (nan anomaly score should be returned for each ignored sample).
 
 - The anomaly detector must be able to handle multiple time series which are identified by the ID columns whose names are
 provided in the constructor argument `id_columns`. These columns should only be used to separate individual time series 
-(not as feature columns).
+(not as feature columns). In case the paper introducing the detector does not mention training on multiple time series, try to come up with
+a reasonable solution. If there is not a clear reasonable solution you can relax on it.
 
 - Your solution must be in your github repository. You should develop your solution in a non-master branch
 and the pull request to master branch should be used as a place for our review.
