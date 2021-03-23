@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "time-series-anomaly-detection"
+version = "1.0.0"
+description = ""
+authors = ["Hellen <hellen@datamole.ai>"]
+exclude = ["tests"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+numpy = "^1.18"
+pandas = "^1.0"
+scikit-learn = "^0.24"
+scipy = "^1.4"
+mca = {version = "^1.0", optional = true}
+statsmodels= {version = "^0.12.2", optional = true}
+tensorflow = {version = ">= 2.3, < 2.4", optional = true}
+h5py = {version = "^2.10", optional = true}
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2"
+pytest-cov = "^2.11"
+pytest-mock = "^3.5.1"
+
+[tool.poetry.extras]
+all = ["tensorflow", "h5py", "statsmodels", "mca"]
+
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
