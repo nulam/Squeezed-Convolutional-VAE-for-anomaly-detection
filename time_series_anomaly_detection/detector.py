@@ -20,8 +20,8 @@ class TemplateDetector(TimeSeriesAnomalyDetector):
         time series during training or inference with ID columns
         included. Using these columns the detector can separate individual
         time series and not use ID columns as feature columns.
-        In case they are not specified, all columns are regarded as feature columns and
-        the provided data is regarded as a single time series.
+        In case they are not specified, all columns are regarded as feature
+        columns and the provided data is regarded as a single time series.
     """
 
     def __init__(
