@@ -81,10 +81,10 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
 
     def __init__(
         self,
+        id_columns: Optional[Iterable[str]] = None,
         latent_dim: Optional[int] = 5,
         time_window: Optional[int] = 8,
-        batch_size: Optional[int] = 8,
-        id_columns: Optional[Iterable[str]] = None,
+        batch_size: Optional[int] = 8,        
         use_probability_reconstruction: Optional[bool] = False
     ):
         super().__init__()
@@ -97,7 +97,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         self._scaler = StandardScaler()
         self._use_probability_reconstruction = use_probability_reconstruction
         
-    def _split_multiple_timeseries_by_id(self, df_series) -> Iterable[pd.DataFrame]:
+    def _split_multiple_timeseries_by_id(self, df_series : pd.DataFrame) -> Iterable[pd.DataFrame]:
         if self._id_columns == []:
             return [df_series]
         
@@ -108,17 +108,21 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         self, X: pd.DataFrame, *args, **kwargs
     ) -> pd.Series:
         time_windows = list(pd.DataFrame(self._scaler.transform(X)).rolling(self._time_window))
+        # score every valid window with an anomaly score
+        window_scores = None
         if self._use_probability_reconstruction:
-            return pd.Series([self._reconstruction_probability(window) for window in time_windows])
+            window_scores = pd.Series([self._reconstruction_probability(window) for window in time_windows])
         else:
-            return pd.Series([self._reconstruction_score_mse(window) for window in time_windows])
+            window_scores = pd.Series([self._reconstruction_score_mse(window) for window in time_windows])
+        # time score calculated as mean of all windows which contain the sample
+        return pd.Series([np.mean(window_scores[i:min(len(window_scores),i+self._time_window)]) for i in range(len(window_scores))])
 
-    def _scale_columns(self, X: pd.DataFrame):
+    def _scale_columns(self, X: pd.DataFrame) -> pd.DataFrame:
         for i in range(len(X)):
             X[i][X[i].columns] = self._scaler.transform(X[i][X[i].columns])
         return X
         
-    def plot_real_vs_generated(self):
+    def plot_real_vs_generated(self) -> None:
         if self._real_samples is None:
             self._real_samples = self._timeseries_generator[0][0] # pick element, pick only timeseries  
         res = self._model(self._real_samples)
@@ -129,29 +133,30 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
             axs[0,i].plot(self._real_samples[i])
             axs[1,i].plot(output[i])            
         plt.show()
+        pass
         
-    def _reparametrization_latent(self, args):
+    def _reparametrization_latent(self, args) -> tf.Tensor:
         mean, logvar = args
         # Adding Gaussian noise, avoiding backpropagation path
         eps = tf.random.normal(shape = (self._batch_size, self._latent_dim))
         return eps * tf.exp(logvar * 0.5) + mean
     
-    def _reparametrization_series(self, args):
+    def _reparametrization_series(self, args) -> tf.Tensor:
         mean, logvar = args
         eps = tf.random.normal(shape = (self._batch_size, self._time_window * self._feature_count))
         return eps * tf.exp(logvar * 0.5) + mean
     
-    def _kl_loss(self, y_true, y_pred):
+    def _kl_loss(self, y_true : tf.Tensor, y_pred : tf.Tensor) -> tf.Tensor:
         mean, logvar = tf.split(y_pred, num_or_size_splits=2, axis=0)
         loss = -0.5*tf.keras.backend.sum(1 + logvar - mean**2 - tf.exp(logvar),axis=-1)
         return loss
     
-    def _reconstruction_loss(self, y_true, y_pred):
+    def _reconstruction_loss(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         input, output = tf.split(y_pred, num_or_size_splits=2, axis=0)
         return self._mse(input, output)
 
     
-    def _build_encoder(self):
+    def _build_encoder(self) -> Model:
     # Encoder
         input = Input(shape=(self._time_window,self._feature_count),batch_size=self._batch_size)
         # Squeeze convolution
@@ -174,7 +179,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         logvar = Dense(self._latent_dim)(x)
         return Model(name='scvae_encoder',inputs=input, outputs=[mean, logvar])     
         
-    def _build_decoder(self):
+    def _build_decoder(self) -> Model:
     # Encoder
         input = Input(shape=(self._latent_dim,1),batch_size=self._batch_size)
         
@@ -199,7 +204,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         logvar = Dense(self._time_window * self._feature_count)(x)
         return Model(name='scvae_decoder',inputs=input, outputs=[mean, logvar])
         
-    def _build_model(self):        
+    def _build_model(self) -> Model:        
         encoder = self._build_encoder()
         decoder = self._build_decoder()
         
@@ -225,6 +230,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         self._model = self._build_model() 
         self._scaler = StandardScaler()
         self._scaler.fit(X)
+        pass
     
     def fit(self, X: pd.DataFrame, learning_rate: float = 0.0005, epochs=20000, *args, **kwargs) -> None:
         self._feature_count = len(X.columns) - len(self._id_columns)
@@ -255,10 +261,11 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         ]
         self._model.compile(loss=losses, optimizer=RMSprop(learning_rate=learning_rate))
         self._model.fit(self._timeseries_generator, epochs=epochs, verbose=0, callbacks=callbacks)
+        pass
         
     # https://github.com/Michedev/VAE_anomaly_detection/blob/master/VAE.py
     # not used by default, poor anomaly detection
-    def _reconstruction_probability(self, X: pd.DataFrame, debug_plots=False):
+    def _reconstruction_probability(self, X: pd.DataFrame, debug_plots: bool = False) -> np.ndarray:
         if np.array(X).shape != (self._time_window, self._feature_count) or X.isnull().values.any():
             return np.nan
         L = 100
@@ -282,7 +289,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         return np.mean(probabilities)
         
     # used by default, implemented as an alternative that better reflects this model's training
-    def _reconstruction_score_mse(self, X: pd.DataFrame, debug_plots=False):
+    def _reconstruction_score_mse(self, X: pd.DataFrame, debug_plots: bool =False) -> np.ndarray:
         if np.array(X).shape != (self._time_window, self._feature_count) or X.isnull().values.any():
             return np.nan
         L = 10
