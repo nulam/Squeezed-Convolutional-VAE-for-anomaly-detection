@@ -390,15 +390,36 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         return model
 
     def _init_empty_model(self, X: pd.DataFrame) -> None:
+        """
+        Initialises this instance of SCVAE using information from the training dataset.
+        These steps are basically the same as the first steps of the `fit` function.
+        The use case for this function is initialisation before loading a trained model manually from a saved file.         
+        Parameters
+        ----------
+        X: pd.DataFrame
+            Training data that were or would be used in model.fit
+        """
         self._feature_count = len(X.columns) - len(self._id_columns)
         self._model = self._build_model()
         self._scaler = StandardScaler()
         self._scaler.fit(X)
         pass
 
-    def fit(self, X: pd.DataFrame, learning_rate: float = 0.0005, epochs=20000, *args, **kwargs) -> None:
+    def fit(self, X: pd.DataFrame, learning_rate: float = 0.0005, epochs: int =20000, *args, **kwargs) -> None:
+        """
+        Wrapper for the tf.keras.Model.fit function. 
+        Parameters
+        ----------
+        X: pd.DataFrame
+            The training dataset.
+        learning_rate: float
+            Learning rate supplied to both of the optimizers.
+        epochs: int
+            Number of iterations through the training dataset.
+        """
         self._feature_count = len(X.columns) - len(self._id_columns)
         X = self._split_multiple_timeseries_by_id(X)
+        self._scaler = StandardScaler()
         self._scaler.fit(pd.concat(X))
         X = self._scale_columns(X)
         self._model = self._build_model()
@@ -419,10 +440,10 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
             #             tf.keras.callbacks.TensorBoard(log_dir=f'./logs'),
 
             # show subplots with real and reconstructed samples to visually compare them
-            CustomFunctionCallback(self.plot_real_vs_generated, epoch_frequency=10),
+            CustomFunctionCallback(self.plot_real_vs_generated, epoch_frequency=100),
 
             # shows several reconstructions and calculates reconstruction probability for one sample
-            CustomFunctionCallback(reconstruct, epoch_frequency=10)
+            CustomFunctionCallback(reconstruct, epoch_frequency=100)
         ]
         self._model.compile(loss=losses, optimizer=RMSprop(learning_rate=learning_rate))
         self._model.fit(self._timeseries_generator, epochs=epochs, verbose=1, callbacks=callbacks)
@@ -430,7 +451,24 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
 
     # https://github.com/Michedev/VAE_anomaly_detection/blob/master/VAE.py
     # not used by default, poor anomaly detection
-    def _reconstruction_probability(self, X: pd.DataFrame, debug_plots: bool = False) -> np.ndarray:
+    def _reconstruction_probability(self, X: pd.DataFrame, debug_plots: bool = False) -> float:
+        """
+        Probabilistic anomaly score calculation of a time window using multivariate probability density function.
+        Turned off by default, but used in the papers.
+        Parameters
+        ----------
+        X: pd.DataFrame
+            DataFrame with a time window queried for anomalies.
+        debug_plots: bool, optional
+            If True, this function plots the input time window and several of its reconstructions.
+            Default value is False.
+        Returns
+        -------
+        float
+            Returns the reconstruction probability. Anomaly score should be interpreted as 1 - reconstruction_probability
+            according to the paper. If the input does not match the expected time window format or contains a NaN value,
+            `np.nan` is returned.
+        """
         if np.array(X).shape != (self._time_window, self._feature_count) or X.isnull().values.any():
             return np.nan
         L = 100
@@ -459,8 +497,29 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
                          in zip(mean_series, logvar_series)]
         return np.mean(probabilities)
 
-    # used by default, implemented as an alternative that better reflects this model's training
+
     def _reconstruction_score_mse(self, X: pd.DataFrame, debug_plots: bool = False) -> np.ndarray:
+        """
+        Probabilistic anomaly score calculation of a time window using multivariate probability density function.
+        Used by default, implemented as an alternative that better reflects this model's training.
+        Parameters
+        ----------
+        X: pd.DataFrame
+            DataFrame with a time window queried for anomalies.
+        debug_plots: bool, optional
+            If True, this function plots the input time window and several of its reconstructions.
+            Default value is False.
+        Returns
+        -------
+        float
+            The returned value represents anomaly score. It is calculated as the average MSE of 100 reconstructions.
+            We encode the input into a latent distribution, sample ten times from it and then feed each of these ten
+            samples into decoder. Altogether we obtain ten time series distributions on the decoder's output.
+            Again, we sample ten times from each of these and obtain 100 samples. Then we calculate average MSE
+            against the input and return it.
+            If the input does not match the expected time window format or contains a NaN value,
+            `np.nan` is returned.
+        """
         if np.array(X).shape != (self._time_window, self._feature_count) or X.isnull().values.any():
             return np.nan
         L = 10
