@@ -40,7 +40,7 @@ class MultipleTimeseriesGenerator(Sequence):
     batch_size: int
         How many time window samples will the generator provide in each iteration.
     """
-    def __init__(self, df_list: Iterable[pd.DataFrame], label_list=None, time_window=8, shuffle=False, batch_size=32):
+    def __init__(self, df_list: Iterable[pd.DataFrame], label_list=None, time_window=4, shuffle=False, batch_size=32):
         super().__init__()
         # drop remainder (batch with len < batch_size)
         df_list = [np.array(series)[:(len(series) - len(series) % batch_size)] for series in df_list]
@@ -150,9 +150,9 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
     def __init__(
             self,
             id_columns: Optional[Iterable[str]] = None,
-            latent_dim: Optional[int] = 5,
-            time_window: Optional[int] = 8,
-            batch_size: Optional[int] = 16,
+            latent_dim: Optional[int] = 4,
+            time_window: Optional[int] = 4,
+            batch_size: Optional[int] = 4,
             use_probability_reconstruction: Optional[bool] = False
     ):
         super().__init__()
@@ -264,11 +264,11 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
 
         # multiple things are output by the model, actual reconstructions are the first element
         output = res[0]
-        fig, axs = plt.subplots(2, 5, figsize=(15, 10))
+        fig, axs = plt.subplots(2, 4, figsize=(15, 10))
 
         # the model outputs both its input and output merged into single tensor, split them and plot them
         _, output = tf.split(output, num_or_size_splits=2, axis=0)
-        for i in range(5):
+        for i in range(4):
             axs[0, i].plot(self._real_samples[i])
             axs[1, i].plot(output[i])
         plt.show()
@@ -405,19 +405,20 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         self._scaler.fit(X)
         pass
 
-    def fit(self, X: pd.DataFrame, learning_rate: float = 0.0005, epochs: int =20000, *args, **kwargs) -> None:
+    def fit(self, X: pd.DataFrame, learning_rate: float = 0.001, epochs: int = 50, *args, **kwargs) -> None:
         """
         Wrapper for the tf.keras.Model.fit function. 
         Parameters
         ----------
         X: pd.DataFrame
-            The training dataset.
+            The training dataset. For training purposes, NaN values are zeroed out.
         learning_rate: float
             Learning rate supplied to both of the optimizers.
         epochs: int
             Number of iterations through the training dataset.
         """
         self._feature_count = len(X.columns) - len(self._id_columns)
+        X = X.fillna(0)
         X = self._split_multiple_timeseries_by_id(X)
         self._scaler = StandardScaler()
         self._scaler.fit(pd.concat(X))
