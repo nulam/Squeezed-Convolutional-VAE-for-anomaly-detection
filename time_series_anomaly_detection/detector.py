@@ -503,7 +503,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
             Default value is 50.
         """
         self._feature_count = len(X.columns) - len(self._id_columns)
-        X = X.fillna(0)
+        X.apply(lambda col : col.fillna(np.mean(col), inplace=True))     
         X = self._split_multiple_timeseries_by_id(X)
         self._scaler = StandardScaler()
         self._scaler.fit(pd.concat(X))
