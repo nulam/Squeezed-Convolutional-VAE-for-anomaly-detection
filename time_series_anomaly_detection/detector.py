@@ -33,16 +33,18 @@ class MultipleTimeseriesGenerator(Sequence):
     ----------
     df_list: Iterable[pd.DataFrame]
         List of DataFrames, each containing one time series.
-    label_list:
+    label_list: list, optional
         Complying with TimeseriesGenerator interface, it is possible to supply target labels for the dataset.
     time_window: int
         Width of the resulting samples.
+        Default value is 4.
     shuffle: bool
-        True if dataset should be iterated randomly and not in order.
+        True if the dataset should be iterated randomly rather than in order.
     batch_size: int
         How many time window samples will the generator provide in each iteration.
+        The default value is 32.
     """
-    def __init__(self, df_list: Iterable[pd.DataFrame], label_list=None, time_window=4, shuffle=False, batch_size=32):
+    def __init__(self, df_list: Iterable[pd.DataFrame], label_list: Optional[list]=None, time_window=4, shuffle=False, batch_size=32):
         super().__init__()
         # drop remainder (batch with len < batch_size)
         df_list = [np.array(series)[:(len(series) - len(series) % batch_size)] for series in df_list]
@@ -91,11 +93,11 @@ class CustomFunctionCallback(tf.keras.callbacks.Callback):
     ----------
     fun : Callable
         The function to be called.
-    epoch_frequency: int, optional
+    epoch_frequency: int
         How often the function should be called. It will called at the end of every `epoch_frequency`th epoch.
         The default is each 50 epochs.
     """
-    def __init__(self, fun: Callable, epoch_frequency: Optional[int] = 50):
+    def __init__(self, fun: Callable, epoch_frequency: int = 50):
         self.fun = fun
         self.epoch_frequency = epoch_frequency
 
@@ -103,9 +105,14 @@ class CustomFunctionCallback(tf.keras.callbacks.Callback):
         """
         This function is called by Keras framework at the end of each epoch.
         This implementation checks whether it's the right time and calls the function stored in the callback if it is.
+        Parameters
+        ----------
+        epoch : int
+            Current epoch number, supplied by the tf.keras module when performing a callback.
+        logs : Optional[dict]
+            As per tensorflow documentation, this is an unused parameter for now.
         """
         if epoch % self.epoch_frequency == 0:
-            print(f"Epoch {epoch}")
             self.fun()
 
 
@@ -126,23 +133,23 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         columns and the provided data is regarded as a single time series.
 
         To ensure the predict_anomaly_score function works correctly, the values in id_columns
-        should be ascending, as there is a groupby operation used, that possibly would mix them up.
+        should be ascending, as there is a groupby operation used, which possibly could mix them up.
 
-    latent_dim: int, optional
+    latent_dim: int
         The dimension of the latent layer, e.g. the layer between the encoder and the decoder.
         The default value is 5.
 
-    time_window: int, optional
+    time_window: int
         The length of time window samples supplied to the model.
         The default value is 8.
 
-    batch_size: int, optional
+    batch_size: int
         The number of samples in each training batch.
         This model uses a reparametrization layer where we need to manually sample from the normal distribution.
         Because of this, current version of the model requires you to supply the training `batch_size` in advance.
         The default value is 16.
 
-    use_probability_reconstruction: bool, optional
+    use_probability_reconstruction: bool
         If True, a probabilistic anomaly scoring method is used, as suggested in the paper.
         As it turns out, the score is very unstable doing it this way. Since MSE is used during the training,
         a MSE-based anomaly detection method is used by default.
@@ -279,6 +286,17 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
     def _reparametrization_latent(self, args) -> tf.Tensor:
         """
         VAE repamatrization trick, used on the encoder's output.
+        The means and variances describe a normal distribution to which the input was encoded.
+        Parameters
+        ----------
+        args: Tuple[tf.Tensor, tf.Tensor]
+            Two tensors with encoded means and log of variances. Needs to be supplied this way due to the
+            tensorflow functional API passing only a single value to the function by default. 
+            
+        Returns
+        -------
+        tf.Tensor
+            Tensor which appears to be sampled from the normal distribution provided in the `args` parameter.
         """
         mean, logvar = args
         # Adding Gaussian noise, avoiding backpropagation path
@@ -287,7 +305,19 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
 
     def _reparametrization_series(self, args) -> tf.Tensor:
         """
-        VAE repamatrization trick, used on the decoder's output.
+        VAE repamatrization trick, used on the decoder's output. This needs to be a separate function
+        from `_reparametrization_latent` due to different shapes of the normal distribution's parameter tensors.
+        The means and variances describe a normal distribution to which the input was encoded.
+        Parameters
+        ----------
+        args: Tuple[tf.Tensor, tf.Tensor]
+            Two tensors with encoded means and log of variances. Needs to be supplied this way due to the
+            tensorflow functional API passing only a single value to the function by default. 
+            
+        Returns
+        -------
+        tf.Tensor
+            Tensor which appears to be sampled from the normal distribution provided in the `args` parameter.
         """
         mean, logvar = args
         eps = tf.random.normal(shape=(self._batch_size, self._time_window * self._feature_count))
@@ -296,6 +326,25 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
     def _kl_loss(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """
         Kullback–Leibler divergence loss, pushes both networks's output to resemble a multivariate N(0,1) distribution.
+        
+        The naming of the arguments is a little unfortunate, due to a desire to use the fit() loop.
+        
+        We do not really need to use the `y_true` argument (as N(0,1) is encoded in the formula itself), 
+        but we need two network output Tensors in the `y_pred` arguemnt. (mean and logvar) 
+        
+        To achieve this, we ignore y_true argument altogether and concatenate the two Tensors into `y_pred`
+        and split them manually here. 
+        Parameters
+        ----------
+        y_true: tf.Tensor
+            Ignored, see function description.
+        y_pred: tf.Tensor
+            Concatenated `mean` and `logvar` tensors, see function description and implementation.
+            
+        Returns
+        -------
+        tf.Tensor
+            Tensor with the loss value.
         """
         mean, logvar = tf.split(y_pred, num_or_size_splits=2, axis=0)
         loss = -0.5 * tf.keras.backend.sum(1 + logvar - mean ** 2 - tf.exp(logvar), axis=-1)
@@ -305,6 +354,23 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         """
         Reconstruction loss, MSE is used in this model due to having unbounded continuous data.
         Attempts were made with binary-cross entropy, but it didn't perform well.
+        
+        The naming of the arguments is a little unfortunate, due to a desire to use the fit() loop.
+        
+        We do not really need to use the `y_true` argument, instead we let the model output both input and output.
+        This is done through the network output Tensors in the `y_pred` arguemnt. (concatenated input and output) 
+
+        Parameters
+        ----------
+        y_true: tf.Tensor
+            Ignored, see function description.
+        y_pred: tf.Tensor
+            Concatenated `input` and `output` tensors, see function description and implementation.
+            
+        Returns
+        -------
+        tf.Tensor
+            Tensor with the loss value.
         """
         input, output = tf.split(y_pred, num_or_size_splits=2, axis=0)
         return self._mse(input, output)
@@ -313,6 +379,11 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         """
         Builds a keras.Model instance of SCVAE encoder. It is implemented exactly as described in the paper, using
         parallel Fire modules, instead of sequential 1D convolutions.
+        
+        Returns
+        -------
+        Model
+            Constructed, uncompiled, untrained encoder model instance.
         """
         # Encoder
         input = Input(shape=(self._time_window, self._feature_count), batch_size=self._batch_size)
@@ -340,6 +411,11 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         """
         Builds a keras.Model instance of SCVAE decoder. It is implemented exactly as described in the paper, using
         parallel Fire modules, instead of sequential 1D transposed convolutions.
+                
+        Returns
+        -------
+        Model
+            Constructed, uncompiled, untrained decoder model instance.
         """
         # Encoder
         input = Input(shape=(self._latent_dim, 1), batch_size=self._batch_size)
@@ -369,6 +445,11 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         """
         Builds a keras.Model instance of the entire SCVAE. It is build by joining encoder and decoder and putting a
         random sampling process with a reparametrization trick on the output of both of the networks.
+        
+        Returns
+        -------
+        Model
+            Constructed, uncompiled, untrained SCVAE model instance.
         """
         encoder = self._build_encoder()
         decoder = self._build_decoder()
@@ -416,8 +497,10 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
             The training dataset. For training purposes, NaN values are zeroed out.
         learning_rate: float
             Learning rate supplied to both of the optimizers.
+            Default value is 0.001.
         epochs: int
             Number of iterations through the training dataset.
+            Default value is 50.
         """
         self._feature_count = len(X.columns) - len(self._id_columns)
         X = X.fillna(0)
@@ -462,7 +545,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         ----------
         X: pd.DataFrame
             DataFrame with a time window queried for anomalies.
-        debug_plots: bool, optional
+        debug_plots: bool
             If True, this function plots the input time window and several of its reconstructions.
             Default value is False.
         Returns
@@ -501,7 +584,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         return np.mean(probabilities)
 
 
-    def _reconstruction_score_mse(self, X: pd.DataFrame, debug_plots: bool = False) -> np.ndarray:
+    def _reconstruction_score_mse(self, X: pd.DataFrame, debug_plots: bool = False) -> float:
         """
         Probabilistic anomaly score calculation of a time window using multivariate probability density function.
         Used by default, implemented as an alternative that better reflects this model's training.
@@ -509,7 +592,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         ----------
         X: pd.DataFrame
             DataFrame with a time window queried for anomalies.
-        debug_plots: bool, optional
+        debug_plots: bool
             If True, this function plots the input time window and several of its reconstructions.
             Default value is False.
         Returns
