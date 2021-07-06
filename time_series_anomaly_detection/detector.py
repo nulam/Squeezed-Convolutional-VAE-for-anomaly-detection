@@ -488,7 +488,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         self._scaler.fit(X)
         pass
 
-    def fit(self, X: pd.DataFrame, learning_rate: float = 0.001, epochs: int = 50, *args, **kwargs) -> None:
+    def fit(self, X: pd.DataFrame, learning_rate: float = 0.001, epochs: int = 50, debug_plots=True, *args, **kwargs) -> None:
         """
         Wrapper for the tf.keras.Model.fit function. 
         Parameters
@@ -501,6 +501,8 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
         epochs: int
             Number of iterations through the training dataset.
             Default value is 50.
+        debug_plots: bool
+            Boolean flag for enabling the plotting callbacks
         """
         self._feature_count = len(X.columns) - len(self._id_columns)
         X.apply(lambda col : col.fillna(np.mean(col), inplace=True))     
@@ -530,7 +532,7 @@ class SCVAEDetector(TimeSeriesAnomalyDetector):
 
             # shows several reconstructions and calculates reconstruction probability for one sample
             CustomFunctionCallback(reconstruct, epoch_frequency=100)
-        ]
+        ] if debug_plots else None
         self._model.compile(loss=losses, optimizer=RMSprop(learning_rate=learning_rate))
         self._model.fit(self._timeseries_generator, epochs=epochs, verbose=1, callbacks=callbacks)
         pass
