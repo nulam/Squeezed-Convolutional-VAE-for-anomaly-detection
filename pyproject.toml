@@ -12,6 +12,7 @@ pandas = "^1.0"
 scikit-learn = "^0.24"
 scipy = "^1.4"
 mca = {version = "^1.0", optional = true}
+matplotlib = {version = ">= 3.4.1"}
 statsmodels= {version = "^0.12.2", optional = true}
 tensorflow = {version = ">= 2.3, < 2.4"}
 tensorflow-gpu = {version = ">= 2.3, < 2.4"}
