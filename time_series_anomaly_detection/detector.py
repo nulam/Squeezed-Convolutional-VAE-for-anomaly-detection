@@ -8,7 +8,9 @@ from time_series_anomaly_detection.abstractions import (
 )
 
 import tensorflow as tf
-from tensorflow.keras.layers import *
+from tensorflow.keras.layers import Input, Conv1D, Conv1DTranspose, Activation, \
+                                    BatchNormalization, Concatenate, Flatten, Dense, \ 
+                                    Lambda, Reshape
 from tensorflow.keras.initializers import glorot_normal  # this is xavier initializer as described in the paper
 from tensorflow.keras import Model
 from tensorflow.keras.losses import binary_crossentropy
